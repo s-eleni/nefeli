@@ -1,0 +1,10 @@
+[
+  {"name": "St. Marys Park", "address": "St. Marys Park, San Francisco, CA", "lat": 37.735179, "lng": -122.427612},
+  {"name": "Dolores Heights", "address": "Dolores Heights, San Francisco, CA", "lat": 37.753775, "lng": -122.427612},
+  {"name": "Duboce Triangle", "address": "Duboce Triangle, San Francisco, CA", "lat": 37.763818, "lng": -122.434307},
+  {"name": "Cole Valley", "address": "Cole Valley, San Francisco, CA 94117", "lat": 37.767618, "lng": -122.451988},
+  {"name": "Alamo Square", "address": "Alamo Square, San Francisco, CA 94117", "lat": 37.774810, "lng": -122.437569},
+  {"name": "Western Addition", "address": "Western Addition, San Francisco, CA", "lat": 37.783222, "lng": -122.438942},
+  {"name": "Pacific Heights", "address": "Pacific Heights, San Francisco, CA", "lat": 37.789327, "lng": -122.440830},
+  {"name": "Marina District", "address": "Marina District, San Francisco, CA", "lat": 37.803027, "lng": -122.440487}
+]
