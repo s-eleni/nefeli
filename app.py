@@ -35,7 +35,7 @@ from scrapers.padmapper import PadMapperScraper
 from scrapers.api_sources import RentCastScraper, RealtyMoleScraper
 
 # Import pipeline
-from pipeline.dedup import deduplicate
+from pipeline.dedup import deduplicate, mark_as_seen
 from pipeline.filters import apply_hard_filters
 from pipeline.distance import calculate_distances
 from pipeline.llm_analysis import run_analysis, judge_rankings
@@ -194,6 +194,9 @@ def run_pipeline():
         logger.info("-" * 40)
 
         filtered_listings, filter_stats = apply_hard_filters(unique_listings, hard_filters)
+
+        # Mark filtered listings as seen so they aren't re-processed on future runs
+        mark_as_seen(filtered_listings)
 
         if not filtered_listings:
             logger.warning("No listings passed hard filters!")

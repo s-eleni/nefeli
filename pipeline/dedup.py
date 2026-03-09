@@ -80,7 +80,7 @@ def deduplicate(listings):
     cross_platform_dupes = total_input - len(unique)
     logger.info(f"[Dedup] Removed {cross_platform_dupes} cross-platform duplicates")
 
-    # Step 2: Check against historical seen_listings
+    # Step 2: Check against historical seen_listings (but don't mark as seen yet)
     new_listings = []
     for listing in unique:
         cursor = conn.execute(
@@ -95,12 +95,6 @@ def deduplicate(listings):
             )
         else:
             new_listings.append(listing)
-            # Insert into seen_listings
-            conn.execute(
-                "INSERT INTO seen_listings (listing_id, address, source, price) VALUES (?, ?, ?, ?)",
-                (listing["listing_id"], listing.get("address", ""),
-                 listing.get("source", ""), listing.get("price"))
-            )
 
     conn.commit()
     historical_dupes = len(unique) - len(new_listings)
@@ -117,3 +111,20 @@ def deduplicate(listings):
 
     conn.close()
     return new_listings
+
+
+def mark_as_seen(listings):
+    """Mark listings as seen in the database. Call this AFTER hard filtering
+    so that listings which don't pass filters can be re-evaluated on future runs."""
+    if not listings:
+        return
+    conn = init_db()
+    for listing in listings:
+        lid = listing.get("listing_id") or generate_listing_id(listing)
+        conn.execute(
+            "INSERT OR IGNORE INTO seen_listings (listing_id, address, source, price) VALUES (?, ?, ?, ?)",
+            (lid, listing.get("address", ""), listing.get("source", ""), listing.get("price"))
+        )
+    conn.commit()
+    conn.close()
+    logger.info(f"[Dedup] Marked {len(listings)} listings as seen")
