@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nefeli — Rental Apartment Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Nefeli</h1>
+            <p>Rental Apartment Monitoring Agent — Find your perfect home faster</p>
+        </div>
+
+        <form method="POST" action="/run" id="searchForm">
+            <!-- Hard Filters -->
+            <div class="card">
+                <h2>Hard Filters</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="city">City</label>
+                        <input type="text" id="city" name="city" value="San Francisco" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="max_rent">Max Monthly Rent ($)</label>
+                        <input type="number" id="max_rent" name="max_rent" value="3500" min="0" step="100">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="min_beds">Min Bedrooms</label>
+                        <input type="number" id="min_beds" name="min_beds" value="1" min="0" max="10">
+                    </div>
+                    <div class="form-group">
+                        <label for="min_baths">Min Bathrooms</label>
+                        <input type="number" id="min_baths" name="min_baths" value="1" min="0" max="10" step="0.5">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Parking</label>
+                    <small>Select all acceptable types (filter passes if listing matches ANY)</small>
+                    <div class="checkbox-grid checkbox-grid-small">
+                        <label><input type="checkbox" name="parking" value="Garage"> Garage</label>
+                        <label><input type="checkbox" name="parking" value="Covered"> Covered</label>
+                        <label><input type="checkbox" name="parking" value="Carport"> Carport</label>
+                        <label><input type="checkbox" name="parking" value="Driveway"> Driveway</label>
+                        <label><input type="checkbox" name="parking" value="Street"> Street</label>
+                        <label><input type="checkbox" name="parking" value="Off-street"> Off-street</label>
+                        <label><input type="checkbox" name="parking" value="No preference" id="parking_none"> No preference</label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Laundry</label>
+                    <small>Select all acceptable types (filter passes if listing matches ANY)</small>
+                    <div class="checkbox-grid checkbox-grid-small">
+                        <label><input type="checkbox" name="laundry" value="In-unit"> In-unit</label>
+                        <label><input type="checkbox" name="laundry" value="In-building/shared"> In-building/shared</label>
+                        <label><input type="checkbox" name="laundry" value="Hookups only"> Hookups only</label>
+                        <label><input type="checkbox" name="laundry" value="Laundromat nearby"> Laundromat nearby</label>
+                        <label><input type="checkbox" name="laundry" value="No preference" id="laundry_none"> No preference</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Soft Preferences -->
+            <div class="card">
+                <h2>Soft Preferences</h2>
+
+                <div class="form-group">
+                    <label>Preferred Neighborhoods</label>
+                    <small>Check your preferred neighborhoods. Unchecked neighborhoods are still included — they just don't get a preference boost.</small>
+                    <div class="checkbox-grid" id="neighborhoods-container">
+                        <!-- Populated dynamically based on city -->
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="transit_preference">Proximity to Transit</label>
+                        <select id="transit_preference" name="transit_preference">
+                            <option value="important">Important</option>
+                            <option value="not_important">Not important</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="lighting">Natural Lighting</label>
+                        <select id="lighting" name="lighting">
+                            <option value="important">Important — prefer bright units</option>
+                            <option value="not_important">Not a priority</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="floor_preference">Floor Preference</label>
+                        <select id="floor_preference" name="floor_preference">
+                            <option value="upper">Prefer upper floors (avoid ground/basement)</option>
+                            <option value="no_preference">No preference</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="entrance_preference">Entrance Preference</label>
+                        <select id="entrance_preference" name="entrance_preference">
+                            <option value="avoid_alley">Avoid alley-facing entrances</option>
+                            <option value="no_preference">No preference</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="other_preferences">Other Preferences</label>
+                    <textarea id="other_preferences" name="other_preferences" placeholder="Any other preferences or requirements... (e.g., pet-friendly, quiet street, near parks)"></textarea>
+                </div>
+            </div>
+
+            <!-- Red Flags -->
+            <div class="card">
+                <h2>Red Flags to Watch For</h2>
+                <small>Check which red flags the LLM should look out for:</small>
+                <div class="checkbox-grid" style="margin-top:8px;">
+                    {% for flag in default_red_flags %}
+                    <label><input type="checkbox" name="red_flags" value="{{ flag }}" checked> {{ flag }}</label>
+                    {% endfor %}
+                </div>
+                <div class="form-group" style="margin-top:12px;">
+                    <label for="custom_red_flags">Custom Red Flags</label>
+                    <input type="text" id="custom_red_flags" name="custom_red_flags" placeholder="Add custom red flags, separated by commas">
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div class="card">
+                <h2>Settings</h2>
+                <div class="form-group">
+                    <label for="email">Your Email Address (for alerts)</label>
+                    <input type="email" id="email" name="email" placeholder="you@example.com">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="runBtn">
+                Run Search Now
+            </button>
+        </form>
+
+        <div class="spinner" id="loadingSpinner">
+            <div class="spinner-icon"></div>
+            <p>Searching for apartments... This may take a few minutes.</p>
+            <p style="font-size:13px; color:#666;">Scraping listings, calculating distances, running LLM analysis...</p>
+        </div>
+    </div>
+
+    <script>
+        // Neighborhood data from server
+        const neighborhoodData = {{ neighborhoods_json | safe }};
+
+        function populateNeighborhoods() {
+            const city = document.getElementById('city').value.trim();
+            const container = document.getElementById('neighborhoods-container');
+            const neighborhoods = neighborhoodData[city] || [];
+
+            if (neighborhoods.length === 0) {
+                container.innerHTML = '<p style="color:#666; font-size:13px;">No neighborhood data available for this city. Neighborhoods won\'t be used for preference boosting.</p>';
+                return;
+            }
+
+            container.innerHTML = neighborhoods.map(n =>
+                `<label><input type="checkbox" name="neighborhoods" value="${n}"> ${n}</label>`
+            ).join('');
+        }
+
+        // Populate on load and on city change
+        document.getElementById('city').addEventListener('change', populateNeighborhoods);
+        document.getElementById('city').addEventListener('input', function() {
+            clearTimeout(this._timeout);
+            this._timeout = setTimeout(populateNeighborhoods, 500);
+        });
+        populateNeighborhoods();
+
+        // "No preference" checkbox logic
+        document.getElementById('parking_none').addEventListener('change', function() {
+            if (this.checked) {
+                document.querySelectorAll('input[name="parking"]').forEach(cb => {
+                    if (cb !== this) cb.checked = false;
+                });
+            }
+        });
+        document.querySelectorAll('input[name="parking"]').forEach(cb => {
+            if (cb.id !== 'parking_none') {
+                cb.addEventListener('change', function() {
+                    if (this.checked) document.getElementById('parking_none').checked = false;
+                });
+            }
+        });
+        document.getElementById('laundry_none').addEventListener('change', function() {
+            if (this.checked) {
+                document.querySelectorAll('input[name="laundry"]').forEach(cb => {
+                    if (cb !== this) cb.checked = false;
+                });
+            }
+        });
+        document.querySelectorAll('input[name="laundry"]').forEach(cb => {
+            if (cb.id !== 'laundry_none') {
+                cb.addEventListener('change', function() {
+                    if (this.checked) document.getElementById('laundry_none').checked = false;
+                });
+            }
+        });
+
+        // Form submission with loading state
+        document.getElementById('searchForm').addEventListener('submit', function() {
+            document.getElementById('runBtn').disabled = true;
+            document.getElementById('runBtn').textContent = 'Running...';
+            document.getElementById('loadingSpinner').classList.add('active');
+        });
+    </script>
+</body>
+</html>
