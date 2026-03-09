@@ -9,6 +9,7 @@ COPY . .
 
 RUN mkdir -p data
 
-EXPOSE 5000
+ENV PORT=5000
+EXPOSE ${PORT}
 
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:5000", "--timeout", "300", "--workers", "2"]
+CMD gunicorn app:app --bind 0.0.0.0:$PORT --timeout 300 --workers 2

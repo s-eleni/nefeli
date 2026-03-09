@@ -1,9 +1,7 @@
 services:
   - type: web
     name: nefeli
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 300 --workers 2
+    runtime: docker
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false
