@@ -76,38 +76,61 @@ def apply_hard_filters(listings, filters):
             stats["filtered_baths"] += 1
             continue
 
-        # Parking filter
+        # Parking filter — only reject if description mentions a parking type
+        # that doesn't match preferences. If parking isn't mentioned, let it through.
         if parking_prefs and "No preference" not in parking_prefs:
             if description:
-                parking_match = False
-                for pref in parking_prefs:
-                    keywords = PARKING_KEYWORDS.get(pref, [pref.lower()])
-                    for kw in keywords:
+                # Check if description mentions ANY parking keyword at all
+                mentions_parking = False
+                for all_kws in PARKING_KEYWORDS.values():
+                    for kw in all_kws:
                         if kw in description:
-                            parking_match = True
+                            mentions_parking = True
                             break
-                    if parking_match:
+                    if mentions_parking:
                         break
-                if not parking_match:
-                    stats["filtered_parking"] += 1
-                    continue
-            # If no description, let it through (can't determine parking)
 
-        # Laundry filter
+                if mentions_parking:
+                    # Parking is mentioned — check if it matches a preferred type
+                    parking_match = False
+                    for pref in parking_prefs:
+                        keywords = PARKING_KEYWORDS.get(pref, [pref.lower()])
+                        for kw in keywords:
+                            if kw in description:
+                                parking_match = True
+                                break
+                        if parking_match:
+                            break
+                    if not parking_match:
+                        stats["filtered_parking"] += 1
+                        continue
+                # If parking not mentioned at all, let it through (unknown)
+
+        # Laundry filter — same logic: only reject if a non-matching type is mentioned
         if laundry_prefs and "No preference" not in laundry_prefs:
             if description:
-                laundry_match = False
-                for pref in laundry_prefs:
-                    keywords = LAUNDRY_KEYWORDS.get(pref, [pref.lower()])
-                    for kw in keywords:
+                mentions_laundry = False
+                for all_kws in LAUNDRY_KEYWORDS.values():
+                    for kw in all_kws:
                         if kw in description:
-                            laundry_match = True
+                            mentions_laundry = True
                             break
-                    if laundry_match:
+                    if mentions_laundry:
                         break
-                if not laundry_match:
-                    stats["filtered_laundry"] += 1
-                    continue
+
+                if mentions_laundry:
+                    laundry_match = False
+                    for pref in laundry_prefs:
+                        keywords = LAUNDRY_KEYWORDS.get(pref, [pref.lower()])
+                        for kw in keywords:
+                            if kw in description:
+                                laundry_match = True
+                                break
+                        if laundry_match:
+                            break
+                    if not laundry_match:
+                        stats["filtered_laundry"] += 1
+                        continue
 
         passed.append(listing)
 
