@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <!-- Nest base - warm terracotta strokes -->
+  <path d="M25 78 C25 78 35 90 60 90 C85 90 95 78 95 78" stroke="#C4704B" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <path d="M20 72 C20 72 32 86 60 86 C88 86 100 72 100 72" stroke="#D4845E" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M28 82 C28 82 38 94 60 94 C82 94 92 82 92 82" stroke="#B8654A" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <!-- Woven texture -->
+  <path d="M32 76 C40 80 50 83 60 83 C70 83 80 80 88 76" stroke="#C4704B" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.6"/>
+  <!-- Little bird sitting in nest -->
+  <ellipse cx="60" cy="62" rx="16" ry="14" fill="#D4845E"/>
+  <!-- Bird body highlight -->
+  <ellipse cx="58" cy="64" rx="12" ry="10" fill="#E0956B"/>
+  <!-- Bird head -->
+  <circle cx="68" cy="50" r="10" fill="#D4845E"/>
+  <circle cx="67" cy="49" r="9" fill="#E0956B"/>
+  <!-- Eye -->
+  <circle cx="72" cy="47" r="2.5" fill="#3D2B1F"/>
+  <circle cx="73" cy="46" r="0.8" fill="white"/>
+  <!-- Beak -->
+  <path d="M78 49 L84 48 L78 52 Z" fill="#C8944A"/>
+  <!-- Tiny roofline hint above -->
+  <path d="M38 34 L60 20 L82 34" stroke="#8B9E7C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M43 34 L60 23 L77 34" stroke="#A3B593" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.5"/>
+  <!-- Small leaf accent -->
+  <path d="M85 32 C88 28 92 30 90 34 C88 37 85 35 85 32Z" fill="#8B9E7C" opacity="0.7"/>
+</svg>

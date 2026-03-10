@@ -13,15 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def build_email_html(listings, filter_stats):
-    """Build a nicely formatted HTML email with ranked listings.
-
-    Args:
-        listings: Ranked list of listing dicts (with all analysis data)
-        filter_stats: Dict with filtering statistics
-
-    Returns:
-        HTML string
-    """
+    """Build a Nido-branded HTML email with ranked listings."""
     date_str = datetime.now().strftime("%B %d, %Y")
     total_found = filter_stats.get("total_input", 0)
     total_passed = filter_stats.get("passed", len(listings))
@@ -43,11 +35,19 @@ def build_email_html(listings, filter_stats):
         red_flag_data = listing.get("red_flag_analysis", {})
         outreach = listing.get("outreach_message", "")
 
-        # Format red flags
+        # Score color
+        if isinstance(score, (int, float)):
+            score_color = "#5A8F5C" if score >= 70 else "#C8944A" if score >= 50 else "#C0524E"
+            bar_width = score
+        else:
+            score_color = "#A89890"
+            bar_width = 0
+
+        # Red flag pills
         red_flags_html = ""
         red_flags = red_flag_data.get("red_flags", [])
         if red_flags:
-            flags_list = ""
+            pills = ""
             for flag in red_flags:
                 if isinstance(flag, dict):
                     issue = flag.get("issue", str(flag))
@@ -55,84 +55,94 @@ def build_email_html(listings, filter_stats):
                 else:
                     issue = str(flag)
                     severity = "low"
-                color = {"high": "#dc3545", "medium": "#fd7e14", "low": "#ffc107"}.get(severity, "#ffc107")
-                flags_list += f'<li style="color: {color};">{issue} ({severity})</li>'
-            red_flags_html = f'<div style="margin-top:8px;"><strong style="color:#dc3545;">Red Flags:</strong><ul style="margin:4px 0;">{flags_list}</ul></div>'
+                pill_colors = {
+                    "high": ("background:#FCEAEA;color:#C0524E;", issue),
+                    "medium": ("background:#F5E6CE;color:#8B6914;", issue),
+                    "low": ("background:#FFF8E1;color:#9E8600;", issue),
+                }
+                style, text = pill_colors.get(severity, pill_colors["low"])
+                pills += f'<span style="{style}display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;margin:2px 4px 2px 0;">{text}</span>'
+            red_flags_html = f'<div style="margin-top:10px;">{pills}</div>'
 
-        # Outreach message for top 5
+        # Outreach for top 5
         outreach_html = ""
         if rank <= 5 and outreach:
             outreach_html = f'''
-            <div style="margin-top:10px; padding:10px; background:#f0f7ff; border-left:3px solid #4a90d9; font-style:italic;">
-                <strong>Draft Outreach Message:</strong><br>
-                {outreach}
+            <div style="margin-top:12px;padding:12px;background:#FBF7F4;border-left:3px solid #C4704B;border-radius:4px;">
+                <strong style="font-size:12px;color:#C4704B;">Draft Outreach:</strong><br>
+                <span style="font-size:13px;color:#3D2B1F;line-height:1.5;">{outreach}</span>
             </div>'''
 
-        # Score bar color
-        if isinstance(score, (int, float)):
-            bar_color = "#28a745" if score >= 70 else "#fd7e14" if score >= 50 else "#dc3545"
-            bar_width = score
-        else:
-            bar_color = "#6c757d"
-            bar_width = 0
+        # Price display
+        price_display = f"${price:,.0f}/mo" if isinstance(price, (int, float)) else f"${price}/mo"
 
         listings_html += f'''
-        <div style="border:1px solid #dee2e6; border-radius:8px; padding:16px; margin-bottom:16px; background:#fff;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h3 style="margin:0; color:#333;">#{rank} — {address}</h3>
-                <span style="font-size:24px; font-weight:bold; color:{bar_color};">{score}/100</span>
-            </div>
-            <div style="background:#e9ecef; border-radius:4px; height:8px; margin:8px 0;">
-                <div style="background:{bar_color}; height:8px; border-radius:4px; width:{bar_width}%;"></div>
-            </div>
-            <table style="width:100%; margin:8px 0; font-size:14px;">
+        <div style="border:1px solid #E8E0D8;border-radius:12px;padding:20px;margin-bottom:14px;background:#FFFFFF;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                    <td><strong>Price:</strong> ${price}/mo</td>
-                    <td><strong>Beds/Baths:</strong> {beds}BR / {baths}BA</td>
-                    <td><strong>Source:</strong> {source}</td>
-                </tr>
-                <tr>
-                    <td colspan="2"><strong>Nearest Shuttle:</strong> {nearest_shuttle} ({shuttle_duration} walk)</td>
-                    <td><a href="{url}" style="color:#4a90d9;">View Listing</a></td>
+                    <td width="40" valign="top">
+                        <div style="width:32px;height:32px;border-radius:50%;background:{'#C8944A' if rank <= 3 else '#C4704B'};color:white;text-align:center;line-height:32px;font-weight:700;font-size:13px;">{rank}</div>
+                    </td>
+                    <td valign="top" style="padding-left:8px;">
+                        <div style="font-size:15px;font-weight:600;color:#3D2B1F;">{address}</div>
+                        <div style="font-size:11px;color:#A89890;margin-top:2px;">via {source}</div>
+                    </td>
+                    <td width="60" valign="top" align="right">
+                        <div style="font-size:20px;font-weight:700;color:{score_color};">{score}</div>
+                        <div style="font-size:10px;color:#A89890;">/ 100</div>
+                    </td>
                 </tr>
             </table>
-            <p style="margin:8px 0; color:#555;">{explanation}</p>
+            <div style="background:#F0EAE4;border-radius:4px;height:6px;margin:10px 0;">
+                <div style="background:{score_color};height:6px;border-radius:4px;width:{bar_width}%;"></div>
+            </div>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#7A6A5E;margin:8px 0;">
+                <tr>
+                    <td>{price_display}</td>
+                    <td>{beds} bd / {baths} ba</td>
+                    <td>{shuttle_duration} to {nearest_shuttle}</td>
+                </tr>
+            </table>
+            <p style="font-size:13px;color:#7A6A5E;line-height:1.5;margin:8px 0;">{explanation}</p>
             {red_flags_html}
             {outreach_html}
+            <a href="{url}" style="display:inline-block;margin-top:10px;font-size:12px;color:#C4704B;text-decoration:none;font-weight:500;">View listing &rarr;</a>
         </div>'''
 
     html = f"""<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width:700px; margin:0 auto; padding:20px; background:#f8f9fa;">
-    <div style="background:linear-gradient(135deg, #4a90d9, #7b68ee); color:white; padding:24px; border-radius:12px 12px 0 0; text-align:center;">
-        <h1 style="margin:0;">New Rental Matches</h1>
-        <p style="margin:8px 0 0; opacity:0.9;">{date_str}</p>
+<body style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:640px;margin:0 auto;padding:20px;background:#FBF7F4;">
+    <div style="text-align:center;padding:28px 20px;background:#FFFFFF;border-radius:16px 16px 0 0;border-bottom:1px solid #E8E0D8;">
+        <div style="font-size:28px;font-weight:700;color:#3D2B1F;letter-spacing:-0.5px;">Nido</div>
+        <div style="font-size:14px;color:#A89890;margin-top:4px;">New Rental Matches &middot; {date_str}</div>
     </div>
 
-    <div style="background:#fff; padding:16px; border-bottom:1px solid #dee2e6;">
-        <div style="display:flex; justify-content:space-around; text-align:center;">
-            <div>
-                <div style="font-size:24px; font-weight:bold; color:#4a90d9;">{total_found}</div>
-                <div style="font-size:12px; color:#666;">Listings Found</div>
-            </div>
-            <div>
-                <div style="font-size:24px; font-weight:bold; color:#28a745;">{total_passed}</div>
-                <div style="font-size:12px; color:#666;">Passed Filters</div>
-            </div>
-            <div>
-                <div style="font-size:24px; font-weight:bold; color:#7b68ee;">{top_score}</div>
-                <div style="font-size:12px; color:#666;">Top Score</div>
-            </div>
-        </div>
+    <div style="background:#FFFFFF;padding:20px;border-bottom:1px solid #E8E0D8;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="text-align:center;">
+            <tr>
+                <td>
+                    <div style="font-size:22px;font-weight:700;color:#C4704B;">{total_found}</div>
+                    <div style="font-size:11px;color:#A89890;text-transform:uppercase;letter-spacing:0.5px;">Scraped</div>
+                </td>
+                <td>
+                    <div style="font-size:22px;font-weight:700;color:#5A8F5C;">{total_passed}</div>
+                    <div style="font-size:11px;color:#A89890;text-transform:uppercase;letter-spacing:0.5px;">Passed</div>
+                </td>
+                <td>
+                    <div style="font-size:22px;font-weight:700;color:#C8944A;">{top_score}</div>
+                    <div style="font-size:11px;color:#A89890;text-transform:uppercase;letter-spacing:0.5px;">Top Score</div>
+                </td>
+            </tr>
+        </table>
     </div>
 
     <div style="padding:16px 0;">
         {listings_html}
     </div>
 
-    <div style="text-align:center; padding:16px; color:#999; font-size:12px;">
-        Generated by Nefeli Rental Agent
+    <div style="text-align:center;padding:20px;color:#A89890;font-size:11px;">
+        Sent by Nido &middot; Your apartment search assistant
     </div>
 </body>
 </html>"""
@@ -141,20 +151,11 @@ def build_email_html(listings, filter_stats):
 
 
 def send_email(to_email, listings, filter_stats):
-    """Send the alert email or save as local HTML file.
-
-    Args:
-        to_email: Recipient email address
-        listings: Ranked list of listing dicts
-        filter_stats: Dict with filtering statistics
-
-    Returns:
-        Tuple of (success: bool, message: str)
-    """
+    """Send the alert email or save as local HTML file."""
     html_content = build_email_html(listings, filter_stats)
     date_str = datetime.now().strftime("%Y-%m-%d")
     passed_count = filter_stats.get("passed", len(listings))
-    subject = f"New Rental Matches ({passed_count}) - {date_str}"
+    subject = f"Nido: {passed_count} New Rental Matches - {date_str}"
 
     # Always save a local copy
     output_dir = PROJECT_ROOT / "data"
@@ -178,10 +179,11 @@ def send_email(to_email, listings, filter_stats):
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = SMTP_EMAIL
+        msg["From"] = f"Nido <{SMTP_EMAIL}>"
         msg["To"] = to_email
 
-        msg.attach(MIMEText(f"You have {passed_count} new rental matches. View the HTML version for details.", "plain"))
+        plain_text = f"You have {passed_count} new rental matches from Nido. View the HTML version for details."
+        msg.attach(MIMEText(plain_text, "plain"))
         msg.attach(MIMEText(html_content, "html"))
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:

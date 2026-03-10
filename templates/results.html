@@ -3,123 +3,165 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nefeli — Search Results</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>Nido — Results</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Nefeli — Search Results</h1>
-            <p>{{ listings|length }} apartments ranked for you</p>
-        </div>
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">
+            <img src="{{ url_for('static', filename='nido-logo.svg') }}" alt="Nido">
+            <span>Nido</span>
+        </a>
+        <a href="/" class="btn btn-ghost">New search</a>
+    </nav>
 
+    <div class="results-container">
+
+        <!-- Email Alert -->
         {% if email_status %}
         <div class="alert {{ 'alert-success' if email_sent else 'alert-warning' }}">
             {{ email_status }}
         </div>
         {% endif %}
 
-        <!-- Stats -->
-        <div class="stats-bar">
-            <div class="stat-item">
-                <div class="stat-value">{{ stats.total_input }}</div>
-                <div class="stat-label">Listings Found</div>
+        <!-- Dashboard -->
+        <div class="dashboard">
+            <div class="dash-card dash-terracotta">
+                <div class="dash-value">{{ stats.total_input|default(0) }}</div>
+                <div class="dash-label">Scraped</div>
             </div>
-            <div class="stat-item">
-                <div class="stat-value">{{ stats.passed }}</div>
-                <div class="stat-label">Passed Filters</div>
+            <div class="dash-card dash-sage">
+                <div class="dash-value">{{ stats.passed|default(0) }}</div>
+                <div class="dash-label">Passed filters</div>
             </div>
-            <div class="stat-item">
-                <div class="stat-value">{{ top_score }}</div>
-                <div class="stat-label">Top Score</div>
+            <div class="dash-card dash-gold">
+                <div class="dash-value">{{ top_score }}</div>
+                <div class="dash-label">Top score</div>
+            </div>
+            <div class="dash-card dash-text">
+                <div class="dash-value">{{ listings|length }}</div>
+                <div class="dash-label">Ranked</div>
             </div>
         </div>
 
         {% if not listings %}
-        <div class="card">
-            <h2>No Listings Found</h2>
-            <p>No listings matched your criteria. Try adjusting your filters:</p>
-            <ul style="margin:12px 0 0 20px;">
-                <li>Increase your max rent</li>
-                <li>Reduce minimum bedrooms/bathrooms</li>
-                <li>Select "No preference" for parking and laundry</li>
-            </ul>
-            <a href="/" class="btn btn-primary" style="margin-top:16px; display:inline-block; text-decoration:none; text-align:center;">Back to Search</a>
+        <!-- No results -->
+        <div class="no-results">
+            <h2>No listings matched your criteria</h2>
+            <p>Try broadening your filters — increase your budget, relax parking or laundry requirements, or add more neighborhoods.</p>
+            <a href="/" class="btn btn-primary mt-2" style="width:auto; display:inline-flex;">Start a new search</a>
         </div>
-        {% endif %}
+        {% else %}
 
-        <!-- Listings -->
-        {% for listing in listings %}
-        <div class="listing-card">
-            <div class="listing-header">
-                <div>
-                    <span class="listing-rank">#{{ loop.index }}</span>
-                    <h3 style="display:inline; margin-left:8px;">{{ listing.address or listing.title or 'Unknown Address' }}</h3>
+        <!-- Listing Cards -->
+        <div class="listings-grid">
+            {% for listing in listings %}
+            {% set rank = loop.index %}
+            {% set score = listing.score|default(0) %}
+            {% set score_class = 'high' if score >= 70 else ('mid' if score >= 50 else 'low') %}
+            {% set circumference = 138.23 %}
+            {% set offset = circumference - (circumference * score / 100) %}
+
+            <div class="listing-card">
+                <div class="listing-top">
+                    <div class="listing-rank-badge {{ 'top-3' if rank <= 3 else '' }}">{{ rank }}</div>
+                    <div class="listing-info">
+                        <div class="listing-address">{{ listing.address|default('Unknown address') }}</div>
+                        <div class="listing-source">via {{ listing.source|default('Unknown') }}</div>
+                    </div>
+                    <div class="listing-score-ring">
+                        <svg viewBox="0 0 52 52">
+                            <circle class="ring-bg" cx="26" cy="26" r="22"/>
+                            <circle class="ring-fill stroke-{{ score_class }}" cx="26" cy="26" r="22"
+                                stroke-dasharray="{{ circumference }}"
+                                stroke-dashoffset="{{ offset }}"/>
+                        </svg>
+                        <div class="listing-score-num score-{{ score_class }}">{{ score }}</div>
+                    </div>
                 </div>
-                <span class="listing-score {% if listing.score >= 70 %}score-high{% elif listing.score >= 50 %}score-mid{% else %}score-low{% endif %}">
-                    {{ listing.score }}/100
-                </span>
-            </div>
 
-            <div class="score-bar">
-                <div class="score-bar-fill" style="width:{{ listing.score }}%; background:{% if listing.score >= 70 %}var(--success){% elif listing.score >= 50 %}var(--warning){% else %}var(--danger){% endif %};"></div>
-            </div>
+                <div class="listing-meta">
+                    {% if listing.price %}
+                    <span class="listing-meta-item">
+                        <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                        {{ "${:,.0f}".format(listing.price) }}/mo
+                    </span>
+                    {% endif %}
+                    {% if listing.bedrooms is not none %}
+                    <span class="listing-meta-item">
+                        <svg viewBox="0 0 24 24"><path d="M3 7v11m0-4h18m0 4V8a3 3 0 00-3-3H6a3 3 0 00-3 3m18 6V7"/></svg>
+                        {{ listing.bedrooms }} bd / {{ listing.bathrooms|default('?') }} ba
+                    </span>
+                    {% endif %}
+                    {% if listing.nearest_shuttle %}
+                    <span class="listing-meta-item">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        {{ listing.nearest_shuttle_duration|default('?') }} to {{ listing.nearest_shuttle }}
+                    </span>
+                    {% endif %}
+                </div>
 
-            <div class="listing-details">
-                <div><strong>Price:</strong> ${{ listing.price or 'N/A' }}/mo</div>
-                <div><strong>Beds/Baths:</strong> {{ listing.bedrooms or 'N/A' }}BR / {{ listing.bathrooms or 'N/A' }}BA</div>
-                <div><strong>Source:</strong> {{ listing.source }}</div>
-                <div><strong>Shuttle:</strong> {{ listing.nearest_shuttle or 'N/A' }} ({{ listing.nearest_shuttle_duration or 'N/A' }})</div>
-            </div>
+                {% if listing.explanation %}
+                <div class="listing-explanation">{{ listing.explanation }}</div>
+                {% endif %}
 
-            {% if listing.explanation %}
-            <p style="margin:8px 0; color:#555; font-size:14px;">{{ listing.explanation }}</p>
-            {% endif %}
-
-            {% if listing.red_flag_analysis and listing.red_flag_analysis.red_flags %}
-            <div class="red-flags">
-                <h4>Red Flags</h4>
-                <ul>
-                    {% for flag in listing.red_flag_analysis.red_flags %}
-                    <li style="color:{% if flag.severity == 'high' %}var(--danger){% elif flag.severity == 'medium' %}var(--warning){% else %}#b8860b{% endif %};">
-                        {{ flag.issue or flag }} ({{ flag.severity or 'low' }})
-                    </li>
+                <!-- Red Flag Pills -->
+                {% set flags = listing.red_flag_analysis.red_flags|default([]) if listing.red_flag_analysis is defined else [] %}
+                {% if flags %}
+                <div class="flag-pills">
+                    {% for flag in flags %}
+                    {% if flag is mapping %}
+                    <span class="flag-pill flag-{{ flag.severity|default('low') }}">{{ flag.issue|default(flag) }}</span>
+                    {% else %}
+                    <span class="flag-pill flag-low">{{ flag }}</span>
+                    {% endif %}
                     {% endfor %}
-                </ul>
+                </div>
+                {% endif %}
+
+                {% if listing.judge_adjustment is defined and listing.judge_adjustment %}
+                <div class="judge-note">Judge: {{ listing.judge_adjustment }}</div>
+                {% endif %}
+
+                <!-- Outreach (top 5, collapsed) -->
+                {% if rank <= 5 and listing.outreach_message is defined and listing.outreach_message %}
+                <details class="outreach-toggle">
+                    <summary>View draft outreach message</summary>
+                    <div class="outreach-content" id="outreach-{{ rank }}">{{ listing.outreach_message }}<button class="copy-btn" onclick="copyOutreach({{ rank }})">Copy</button></div>
+                </details>
+                {% endif %}
+
+                {% if listing.url %}
+                <a href="{{ listing.url }}" target="_blank" rel="noopener" class="listing-link">
+                    View original listing
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </a>
+                {% endif %}
             </div>
-            {% endif %}
-
-            {% if listing.judge_adjustment %}
-            <p style="font-size:12px; color:var(--secondary); margin-top:4px;">
-                <strong>Judge note:</strong> {{ listing.judge_adjustment }}
-            </p>
-            {% endif %}
-
-            {% if listing.outreach_message and loop.index <= 5 %}
-            <div class="outreach-box">
-                <strong>Draft Outreach Message:</strong>
-                {{ listing.outreach_message }}
-            </div>
-            {% endif %}
-
-            {% if listing.url %}
-            <a href="{{ listing.url }}" target="_blank" style="display:inline-block; margin-top:12px; color:var(--primary); font-size:14px;">
-                View Original Listing &rarr;
-            </a>
-            {% endif %}
-        </div>
-        {% endfor %}
-
-        {% if pipeline_log %}
-        <div class="card">
-            <h2>Pipeline Log</h2>
-            <div class="log-box">{{ pipeline_log }}</div>
+            {% endfor %}
         </div>
         {% endif %}
 
-        <a href="/" class="btn btn-primary" style="margin-top:8px; display:block; text-decoration:none; text-align:center;">
-            Run Another Search
-        </a>
+        <!-- Pipeline Log -->
+        {% if pipeline_log %}
+        <details class="log-section">
+            <summary class="log-toggle">View pipeline log</summary>
+            <div class="log-box">{{ pipeline_log }}</div>
+        </details>
+        {% endif %}
     </div>
+
+    <script>
+    function copyOutreach(rank) {
+        const el = document.getElementById('outreach-' + rank);
+        const text = el.childNodes[0].textContent.trim();
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = el.querySelector('.copy-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy', 2000);
+        });
+    }
+    </script>
 </body>
 </html>

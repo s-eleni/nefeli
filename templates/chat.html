@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nido — Find Your Nest</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">
+            <img src="{{ url_for('static', filename='nido-logo.svg') }}" alt="Nido">
+            <span>Nido</span>
+        </a>
+        <span class="navbar-step">Step 1 of 2 &mdash; Tell me what you're looking for</span>
+    </nav>
+
+    <div class="chat-page">
+        <div class="chat-messages" id="chatMessages">
+            <div class="chat-bubble assistant">
+                Hey! I'm Nido. Tell me what you're looking for in an apartment &mdash; budget, neighborhoods, must-haves, dealbreakers, anything.
+            </div>
+        </div>
+
+        <div class="chat-typing" id="typingIndicator">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+        </div>
+
+        <div class="chat-input-area">
+            <textarea id="chatInput" placeholder="e.g. I'm looking for a 1-bed in the Mission under $3k with in-unit laundry..." rows="1"></textarea>
+            <button class="chat-send-btn" id="sendBtn" title="Send">
+                <svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const typingIndicator = document.getElementById('typingIndicator');
+
+    let conversationHistory = [
+        {
+            role: "assistant",
+            content: "Hey! I'm Nido. Tell me what you're looking for in an apartment \u2014 budget, neighborhoods, must-haves, dealbreakers, anything."
+        }
+    ];
+    let exchangeCount = 0;
+
+    // Auto-resize textarea
+    chatInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+
+    // Send on Enter (Shift+Enter for newline)
+    chatInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    sendBtn.addEventListener('click', sendMessage);
+
+    function addBubble(text, role) {
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble ' + role;
+        bubble.textContent = text;
+        chatMessages.appendChild(bubble);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function showTyping() {
+        typingIndicator.classList.add('active');
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function hideTyping() {
+        typingIndicator.classList.remove('active');
+    }
+
+    async function sendMessage() {
+        const text = chatInput.value.trim();
+        if (!text) return;
+
+        // Add user bubble
+        addBubble(text, 'user');
+        conversationHistory.push({ role: "user", content: text });
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+        sendBtn.disabled = true;
+        exchangeCount++;
+
+        showTyping();
+
+        try {
+            const resp = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: conversationHistory })
+            });
+            const data = await resp.json();
+            hideTyping();
+
+            if (data.done) {
+                // Conversation is complete — transition to form
+                if (data.message) {
+                    addBubble(data.message, 'assistant');
+                    conversationHistory.push({ role: "assistant", content: data.message });
+                }
+                // Small delay then redirect with extracted data
+                setTimeout(() => {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '/review';
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'extraction';
+                    input.value = JSON.stringify(data.extraction);
+                    form.appendChild(input);
+                    const histInput = document.createElement('input');
+                    histInput.type = 'hidden';
+                    histInput.name = 'chat_history';
+                    histInput.value = JSON.stringify(conversationHistory);
+                    form.appendChild(histInput);
+                    document.body.appendChild(form);
+                    form.submit();
+                }, 1200);
+            } else {
+                addBubble(data.message, 'assistant');
+                conversationHistory.push({ role: "assistant", content: data.message });
+                sendBtn.disabled = false;
+                chatInput.focus();
+            }
+        } catch (err) {
+            hideTyping();
+            addBubble("Sorry, something went wrong. Please try again.", 'assistant');
+            sendBtn.disabled = false;
+        }
+    }
+    </script>
+</body>
+</html>

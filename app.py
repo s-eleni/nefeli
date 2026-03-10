@@ -1,14 +1,16 @@
-"""Nefeli — Rental Apartment Monitoring Agent.
+"""Nido — Rental Apartment Finder.
 
 Flask web app that orchestrates the full pipeline:
-1. User preferences form
-2. Listing acquisition (scrapers + APIs)
-3. Deduplication
-4. Hard filtering
-5. Distance calculation
-6. LLM analysis (red flags + scoring + judge)
-7. Outreach message drafting
-8. Email alert
+1. Chatbot intake (conversational preferences)
+2. LLM extraction (chat → structured criteria)
+3. Review form (pre-filled, editable)
+4. Listing acquisition (scrapers + APIs)
+5. Deduplication
+6. Hard filtering
+7. Distance calculation
+8. LLM analysis (red flags + scoring + judge)
+9. Outreach message drafting
+10. Email alert
 """
 
 import io
@@ -17,10 +19,13 @@ import logging
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from flask import Flask, render_template, request, redirect, url_for
+import anthropic
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 
 import config
-from config import FLASK_SECRET_KEY, NEIGHBORHOODS, DEFAULT_RED_FLAGS
+from config import (
+    FLASK_SECRET_KEY, NEIGHBORHOODS, DEFAULT_RED_FLAGS, ANTHROPIC_API_KEY,
+)
 
 # Import scrapers
 from scrapers.craigslist import CraigslistScraper
@@ -53,6 +58,9 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET_KEY
 
+# Claude client for chat
+claude_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
 # All available scrapers
 ALL_SCRAPERS = [
     CraigslistScraper(),
@@ -68,22 +76,218 @@ ALL_SCRAPERS = [
     RealtyMoleScraper(),
 ]
 
+# Available neighborhoods as a formatted string for the system prompt
+NEIGHBORHOODS_STR = ", ".join(NEIGHBORHOODS.get("San Francisco", []))
+
+CHAT_SYSTEM_PROMPT = f"""You are Nido, a friendly rental apartment search assistant for San Francisco. You help people find apartments by having a brief, warm conversation.
+
+Your job:
+1. Understand what they're looking for: budget, neighborhoods, bedrooms/bathrooms, parking, laundry, and any other preferences or dealbreakers.
+2. Be conversational and natural — like texting a knowledgeable friend. Don't list questions as a checklist.
+3. Infer reasonable defaults from context. If they say "1-bed" you don't need to ask about bathrooms (assume 1).
+4. Keep it to 2-3 exchanges max. After each response, assess if you have enough to start a search. You need at minimum: a rough budget and general area/neighborhood preference.
+5. Ask about what's genuinely missing — don't re-ask about things they've already covered.
+6. Available SF neighborhoods: {NEIGHBORHOODS_STR}
+
+When you have enough information, end your message with the EXACT marker: [READY]
+This marker tells the system to extract criteria and show the review form. Include a brief transition like "Got it — I've put together your search criteria. Take a look and tweak anything before I start searching." followed by [READY].
+
+IMPORTANT: Do NOT include [READY] until you have at least a budget range and some location preferences. After 2-3 exchanges you should have enough — wrap it up."""
+
+EXTRACTION_PROMPT = """Extract structured apartment search criteria from this conversation. Return ONLY valid JSON matching this exact schema — no markdown, no explanation:
+
+{{
+  "city": "San Francisco",
+  "max_rent": <number>,
+  "min_beds": <number, default 1>,
+  "min_baths": <number, default 1>,
+  "parking": <list of strings from: "Garage", "Covered", "Carport", "Driveway", "Street", "Off-street", "No preference">,
+  "laundry": <list of strings from: "In-unit", "In-building/shared", "Hookups only", "Laundromat nearby", "No preference">,
+  "neighborhoods": <list of neighborhood names>,
+  "transit_proximity": <"important" or "not_important">,
+  "natural_lighting": <"important" or "not_important">,
+  "floor_preference": <"upper" or "no_preference">,
+  "entrance_preference": <"avoid_alley" or "no_preference">,
+  "other_preferences": <string with any extra preferences>,
+  "red_flags": <list of strings from the default flags that are relevant>,
+  "custom_red_flags": <string, comma-separated custom flags or empty>,
+  "email": <string or empty>
+}}
+
+Available SF neighborhoods: {neighborhoods}
+
+Default red flags (include all unless user specifically said they don't care about some):
+{red_flags}
+
+Rules:
+- Infer reasonable defaults for anything not explicitly mentioned
+- If parking not mentioned, use ["No preference"]
+- If laundry not mentioned, use ["No preference"]
+- If no specific neighborhoods mentioned, include popular ones like Mission, Noe Valley, Hayes Valley, Castro, Inner Sunset, etc.
+- Budget: use the max they mentioned. If they said "around $3k", use 3000. If "under $3500", use 3500.
+- Be generous with neighborhood selection — include any that seem plausible from the conversation
+
+Conversation:
+{conversation}"""
+
 
 @app.route("/")
 def index():
-    """Render the preferences form."""
-    return render_template(
-        "index.html",
-        neighborhoods_json=json.dumps(NEIGHBORHOODS),
-        default_red_flags=DEFAULT_RED_FLAGS,
-    )
+    """Render the chatbot intake page."""
+    return render_template("chat.html")
 
 
 @app.route("/api/neighborhoods")
 def get_neighborhoods():
     """Return neighborhood list for a given city (AJAX endpoint)."""
     city = request.args.get("city", "San Francisco")
-    return json.dumps(NEIGHBORHOODS.get(city, []))
+    return jsonify(NEIGHBORHOODS.get(city, []))
+
+
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    """Handle a chatbot message exchange. Returns assistant response or extraction."""
+    data = request.get_json()
+    messages = data.get("messages", [])
+
+    # Build messages for Claude (skip the first assistant greeting — it's in system prompt)
+    claude_messages = []
+    for msg in messages:
+        if msg["role"] in ("user", "assistant"):
+            claude_messages.append({"role": msg["role"], "content": msg["content"]})
+
+    # Skip the initial assistant greeting in messages to Claude since it's implied by system prompt
+    if claude_messages and claude_messages[0]["role"] == "assistant":
+        claude_messages = claude_messages[1:]
+
+    try:
+        response = claude_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=600,
+            system=CHAT_SYSTEM_PROMPT,
+            messages=claude_messages,
+        )
+        assistant_text = response.content[0].text
+
+        # Check if conversation is done
+        if "[READY]" in assistant_text:
+            clean_text = assistant_text.replace("[READY]", "").strip()
+
+            # Run extraction
+            extraction = extract_criteria(messages + [{"role": "assistant", "content": clean_text}])
+
+            return jsonify({
+                "done": True,
+                "message": clean_text,
+                "extraction": extraction,
+            })
+        else:
+            return jsonify({
+                "done": False,
+                "message": assistant_text,
+            })
+
+    except Exception as e:
+        logger.error(f"Chat API error: {e}")
+        return jsonify({
+            "done": False,
+            "message": "Sorry, I had trouble processing that. Could you try again?",
+        }), 500
+
+
+def extract_criteria(messages):
+    """Use Claude to extract structured search criteria from conversation history."""
+    conversation_text = "\n".join(
+        f"{'User' if m['role'] == 'user' else 'Nido'}: {m['content']}"
+        for m in messages
+    )
+
+    neighborhoods_str = ", ".join(NEIGHBORHOODS.get("San Francisco", []))
+    red_flags_str = "\n".join(f"- {f}" for f in DEFAULT_RED_FLAGS)
+
+    prompt = EXTRACTION_PROMPT.format(
+        neighborhoods=neighborhoods_str,
+        red_flags=red_flags_str,
+        conversation=conversation_text,
+    )
+
+    try:
+        response = claude_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.content[0].text.strip()
+
+        # Strip markdown code fences if present
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+            if raw.endswith("```"):
+                raw = raw[:-3]
+            raw = raw.strip()
+
+        return json.loads(raw)
+    except Exception as e:
+        logger.error(f"Extraction error: {e}")
+        # Return sensible defaults
+        return {
+            "city": "San Francisco",
+            "max_rent": 3500,
+            "min_beds": 1,
+            "min_baths": 1,
+            "parking": ["No preference"],
+            "laundry": ["No preference"],
+            "neighborhoods": ["Mission", "Noe Valley", "Hayes Valley", "Castro", "Inner Sunset"],
+            "transit_proximity": "important",
+            "natural_lighting": "important",
+            "floor_preference": "no_preference",
+            "entrance_preference": "no_preference",
+            "other_preferences": "",
+            "red_flags": list(DEFAULT_RED_FLAGS),
+            "custom_red_flags": "",
+            "email": "",
+        }
+
+
+@app.route("/review", methods=["POST"])
+def review():
+    """Show the pre-filled review form with extracted criteria."""
+    extraction_raw = request.form.get("extraction", "{}")
+    try:
+        data = json.loads(extraction_raw)
+    except json.JSONDecodeError:
+        data = {}
+
+    # Ensure all keys exist with defaults
+    defaults = {
+        "city": "San Francisco",
+        "max_rent": 3500,
+        "min_beds": 1,
+        "min_baths": 1,
+        "parking": ["No preference"],
+        "laundry": ["No preference"],
+        "neighborhoods": [],
+        "transit_proximity": "important",
+        "natural_lighting": "important",
+        "floor_preference": "no_preference",
+        "entrance_preference": "no_preference",
+        "other_preferences": "",
+        "red_flags": list(DEFAULT_RED_FLAGS),
+        "custom_red_flags": "",
+        "email": "",
+    }
+    for key, val in defaults.items():
+        data.setdefault(key, val)
+
+    city = data.get("city", "San Francisco")
+    neighborhoods = NEIGHBORHOODS.get(city, [])
+
+    return render_template(
+        "review.html",
+        data=data,
+        neighborhoods=neighborhoods,
+        default_red_flags=DEFAULT_RED_FLAGS,
+    )
 
 
 @app.route("/run", methods=["POST"])
@@ -119,7 +323,7 @@ def run_pipeline():
             red_flags.extend([f.strip() for f in custom_red_flags.split(",") if f.strip()])
 
         logger.info("=" * 60)
-        logger.info("NEFELI RENTAL AGENT — PIPELINE STARTING")
+        logger.info("NIDO RENTAL AGENT — PIPELINE STARTING")
         logger.info("=" * 60)
         logger.info(f"City: {city}, Max Rent: ${max_rent}, Beds: {min_beds}+, Baths: {min_baths}+")
         logger.info(f"Parking: {parking}, Laundry: {laundry}")
@@ -200,7 +404,6 @@ def run_pipeline():
 
         if not filtered_listings:
             logger.warning("No listings passed hard filters!")
-            # Return results page with no listings
             logging.getLogger().removeHandler(log_handler)
             return render_template(
                 "results.html",

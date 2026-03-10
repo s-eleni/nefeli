@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nido — Review Your Criteria</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">
+            <img src="{{ url_for('static', filename='nido-logo.svg') }}" alt="Nido">
+            <span>Nido</span>
+        </a>
+        <span class="navbar-step">Step 2 of 2 &mdash; Review &amp; launch</span>
+    </nav>
+
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner-icon"></div>
+        <div class="loading-text">Searching for apartments...</div>
+        <div class="loading-substep" id="loadingSubstep">This usually takes 1-2 minutes. Hang tight!</div>
+    </div>
+
+    <div class="container">
+        <div class="page-header">
+            <h1>Review your search criteria</h1>
+            <p>Everything below was filled from our chat. Tweak anything, then hit search.</p>
+        </div>
+
+        <form method="POST" action="/run" id="searchForm">
+
+            <!-- Hard Filters -->
+            <div class="form-section">
+                <div class="form-section-title">
+                    <svg viewBox="0 0 24 24"><path d="M3 6h18M7 12h10M10 18h4" stroke-linecap="round"/></svg>
+                    Hard Filters
+                </div>
+
+                <div class="form-row mb-2">
+                    <div class="form-group">
+                        <label for="city">City</label>
+                        <input type="text" id="city" name="city" value="{{ data.city or 'San Francisco' }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="max_rent">Max monthly rent ($)</label>
+                        <input type="number" id="max_rent" name="max_rent" value="{{ data.max_rent or 3500 }}" min="0" step="100">
+                    </div>
+                </div>
+
+                <div class="form-row mb-2">
+                    <div class="form-group">
+                        <label for="min_beds">Min bedrooms</label>
+                        <input type="number" id="min_beds" name="min_beds" value="{{ data.min_beds or 1 }}" min="0" max="10">
+                    </div>
+                    <div class="form-group">
+                        <label for="min_baths">Min bathrooms</label>
+                        <input type="number" id="min_baths" name="min_baths" value="{{ data.min_baths or 1 }}" min="0" max="10" step="0.5">
+                    </div>
+                </div>
+
+                <div class="form-group mb-2">
+                    <label>Parking</label>
+                    <small>Only listings mentioning a different parking type will be excluded</small>
+                    <div class="checkbox-grid checkbox-grid-sm">
+                        {% set parking_options = ['Garage', 'Covered', 'Carport', 'Driveway', 'Street', 'Off-street', 'No preference'] %}
+                        {% for opt in parking_options %}
+                        <label>
+                            <input type="checkbox" name="parking" value="{{ opt }}"
+                                {% if opt in data.parking %}checked{% endif %}>
+                            <span>{{ opt }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Laundry</label>
+                    <small>Only listings mentioning a different laundry type will be excluded</small>
+                    <div class="checkbox-grid checkbox-grid-sm">
+                        {% set laundry_options = ['In-unit', 'In-building/shared', 'Hookups only', 'Laundromat nearby', 'No preference'] %}
+                        {% for opt in laundry_options %}
+                        <label>
+                            <input type="checkbox" name="laundry" value="{{ opt }}"
+                                {% if opt in data.laundry %}checked{% endif %}>
+                            <span>{{ opt }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Soft Preferences -->
+            <div class="form-section">
+                <div class="form-section-title">
+                    <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01L12 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Soft Preferences
+                </div>
+
+                <div class="form-group mb-2">
+                    <label>Preferred neighborhoods</label>
+                    <small>Unchecked neighborhoods won't be excluded &mdash; they just won't get a preference boost</small>
+                    <div class="checkbox-grid" id="neighborhoodGrid">
+                        {% for n in neighborhoods %}
+                        <label>
+                            <input type="checkbox" name="neighborhoods" value="{{ n }}"
+                                {% if n in data.neighborhoods %}checked{% endif %}>
+                            <span>{{ n }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="form-row mb-2">
+                    <div class="form-group">
+                        <label for="transit_preference">Transit proximity</label>
+                        <select id="transit_preference" name="transit_preference">
+                            <option value="important" {% if data.transit_proximity == 'important' %}selected{% endif %}>Important</option>
+                            <option value="not_important" {% if data.transit_proximity == 'not_important' %}selected{% endif %}>Not a priority</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="lighting">Natural lighting</label>
+                        <select id="lighting" name="lighting">
+                            <option value="important" {% if data.natural_lighting == 'important' %}selected{% endif %}>Important &mdash; prefer bright units</option>
+                            <option value="not_important" {% if data.natural_lighting == 'not_important' %}selected{% endif %}>Not a priority</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row mb-2">
+                    <div class="form-group">
+                        <label for="floor_preference">Floor preference</label>
+                        <select id="floor_preference" name="floor_preference">
+                            <option value="upper" {% if data.floor_preference == 'upper' %}selected{% endif %}>Prefer upper floors</option>
+                            <option value="no_preference" {% if data.floor_preference == 'no_preference' %}selected{% endif %}>No preference</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="entrance_preference">Entrance</label>
+                        <select id="entrance_preference" name="entrance_preference">
+                            <option value="avoid_alley" {% if data.entrance_preference == 'avoid_alley' %}selected{% endif %}>Avoid alley-facing</option>
+                            <option value="no_preference" {% if data.entrance_preference == 'no_preference' %}selected{% endif %}>No preference</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="other_preferences">Other preferences</label>
+                    <textarea id="other_preferences" name="other_preferences" rows="3" placeholder="Anything else you care about...">{{ data.other_preferences or '' }}</textarea>
+                </div>
+            </div>
+
+            <!-- Red Flags -->
+            <div class="form-section">
+                <div class="form-section-title">
+                    <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    Red Flags to Watch For
+                </div>
+
+                <div class="checkbox-grid">
+                    {% for flag in default_red_flags %}
+                    <label>
+                        <input type="checkbox" name="red_flags" value="{{ flag }}"
+                            {% if flag in data.red_flags %}checked{% endif %}>
+                        <span>{{ flag }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+
+                <div class="form-group mt-2">
+                    <label for="custom_red_flags">Custom red flags</label>
+                    <input type="text" id="custom_red_flags" name="custom_red_flags"
+                        value="{{ data.custom_red_flags or '' }}"
+                        placeholder="Comma-separated, e.g. mold, pest issues">
+                </div>
+            </div>
+
+            <!-- Email -->
+            <div class="form-section">
+                <div class="form-section-title">
+                    <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    Email Alert
+                </div>
+                <div class="form-group">
+                    <label for="email">Your email address</label>
+                    <small>Results will also be emailed to you</small>
+                    <input type="email" id="email" name="email" value="{{ data.email or '' }}" placeholder="you@example.com">
+                </div>
+            </div>
+
+            <!-- Sticky Footer -->
+            <div class="form-footer">
+                <a href="/" class="btn btn-ghost">&larr; Back to chat</a>
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    Search apartments
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+    // "No preference" toggle logic for parking and laundry
+    document.querySelectorAll('.checkbox-grid').forEach(grid => {
+        const noPreference = grid.querySelector('input[value="No preference"]');
+        if (!noPreference) return;
+        const others = [...grid.querySelectorAll('input[type="checkbox"]')].filter(c => c.value !== 'No preference');
+
+        noPreference.addEventListener('change', () => {
+            if (noPreference.checked) others.forEach(c => { c.checked = false; });
+        });
+        others.forEach(cb => cb.addEventListener('change', () => {
+            if (cb.checked) noPreference.checked = false;
+        }));
+    });
+
+    // Dynamic neighborhood loading on city change
+    const cityInput = document.getElementById('city');
+    const neighborhoodGrid = document.getElementById('neighborhoodGrid');
+    let debounceTimer;
+
+    cityInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(async () => {
+            const city = cityInput.value.trim();
+            if (!city) return;
+            try {
+                const resp = await fetch('/api/neighborhoods?city=' + encodeURIComponent(city));
+                const neighborhoods = await resp.json();
+                neighborhoodGrid.innerHTML = neighborhoods.map(n =>
+                    `<label><input type="checkbox" name="neighborhoods" value="${n}"><span>${n}</span></label>`
+                ).join('');
+            } catch(e) {}
+        }, 500);
+    });
+
+    // Submit with loading overlay
+    document.getElementById('searchForm').addEventListener('submit', function(e) {
+        document.getElementById('submitBtn').disabled = true;
+        document.getElementById('loadingOverlay').classList.add('active');
+
+        const steps = [
+            "Scraping listings from Craigslist, RentCast, and more...",
+            "Removing duplicates...",
+            "Applying your filters...",
+            "Calculating distances to shuttle stops...",
+            "Analyzing listings with AI...",
+            "Validating rankings...",
+            "Drafting outreach messages...",
+            "Almost there..."
+        ];
+        let i = 0;
+        const substep = document.getElementById('loadingSubstep');
+        setInterval(() => {
+            if (i < steps.length) { substep.textContent = steps[i]; i++; }
+        }, 10000);
+    });
+    </script>
+</body>
+</html>
